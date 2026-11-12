@@ -1,0 +1,6 @@
+#!/bin/zsh
+set -eu
+bridge_package_dir=${0:A:h}
+export PYTHONPATH="$bridge_package_dir"
+export PYTHONDONTWRITEBYTECODE=1
+exec /usr/bin/python3 -m dayuan "$@"

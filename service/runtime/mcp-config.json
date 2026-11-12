@@ -1,0 +1,10 @@
+{
+  "mcpServers": {
+    "dayuan-local": {
+      "command": "/Library/Application Support/Dayuan Bridge/dayuan-cli",
+      "args": [
+        "mcp"
+      ]
+    }
+  }
+}

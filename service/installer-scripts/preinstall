@@ -1,0 +1,14 @@
+#!/bin/zsh
+set -eu
+if [[ "$3" != "/" ]]; then
+  print -u2 'Dayuan Bridge must be installed on the current system volume.'
+  exit 1
+fi
+if [[ ! -f /Library/Developer/CommandLineTools/Library/PrivateFrameworks/LLDB.framework/Resources/Python/lldb/__init__.py ]]; then
+  print -u2 'Install Apple Xcode Command Line Tools first (xcode-select --install).'
+  exit 1
+fi
+/usr/bin/python3 -I "${0:A:h}/preflight.py"
+if /bin/launchctl print system/local.dayuan.bridge >/dev/null 2>&1; then
+  /bin/launchctl bootout system/local.dayuan.bridge
+fi
