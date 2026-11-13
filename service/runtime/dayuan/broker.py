@@ -26,7 +26,7 @@ def socket_path():
     return runtime_dir() / 'bridge.sock'
 
 
-def request(data, timeout=180, path=None):
+def request(data, timeout=240, path=None):
     path = path or socket_path()
     with socket.socket(socket.AF_UNIX, socket.SOCK_STREAM) as conn:
         conn.settimeout(timeout)
@@ -111,6 +111,21 @@ class Broker:
             raise RuntimeError(value.get('error') or 'NATIVE_CLEANUP_FAILED')
         return value['data']
 
+    def ready_context(self):
+        # Each attempt detaches so the client's run loop can populate its list
+        # and load messages asynchronously. No query is dispatched here.
+        deadline = time.monotonic() + 100
+        for attempt in range(3):
+            context = self.native_call({'action': 'prepare'})
+            if context.get('window_attached'):
+                raise RuntimeError('BACKGROUND_CONTROLLER_HAS_WINDOW')
+            if context.get('ready') and context.get('session'):
+                return context
+            if time.monotonic() >= deadline:
+                break
+            self.stopping.wait(1)
+        raise RuntimeError('BACKGROUND_SESSION_NOT_READY: login or an available Dayuan history session is required')
+
     def public_job(self, job):
         return {k: job[k] for k in ('job_id', 'status', 'created_at', 'text', 'error') if k in job}
 
@@ -141,7 +156,7 @@ class Broker:
                   'Do not include these markers in progress updates. Preserve tables '
                   'as Markdown and distinguish observations from inference.')
         try:
-            context = self.native_call({'action': 'doctor'})
+            context = self.ready_context()
             if not context.get('ready') or not context.get('session'):
                 raise RuntimeError('ASSISTANT_SESSION_UNAVAILABLE')
             with self.jobs_lock:
@@ -199,7 +214,7 @@ class Broker:
                 if not retargeted and 'CLIENT_PID_INVALID' in str(exc):
                     retargeted = True
                     try:
-                        context = self.native_call({'action': 'doctor'})
+                        context = self.ready_context()
                         if context.get('ready') and context.get('session') == job['session']:
                             with self.jobs_lock:
                                 job['pid'] = context['pid'];self._persist()
@@ -223,6 +238,7 @@ class Broker:
             except Exception as exc:
                 status = {'ready': False, 'reason': str(exc)}
             status['service_running'] = True
+            status['automatic_prepare_on_submit'] = True
             with self.jobs_lock:
                 status['active_job'] = self.active_job
             return status

@@ -9,7 +9,7 @@
 ## 调用顺序
 
 1. 直接执行 CLI `dayuan`；若 PATH 中找不到，使用 `$HOME/.local/bin/dayuan` 或 `/usr/local/bin/dayuan`。不再维护或注册 MCP 接入。
-2. 首先执行 `dayuan status`，确认企微登录、会话与桥接状态。当前客户端的 `--help` 和实际状态是能力依据。
+2. 首先执行 `dayuan status`，检查服务。0.2.2 会在提交时自动准备独立后台会话：若 `service_running=true` 且 `automatic_prepare_on_submit=true`，即使 `ready=false`，仍直接执行一次 `submit` / `ask`。不要要求用户打开大圆、选择历史对话、发送校准消息或运行启动命令。以实际提交错误决定是否需要协助。
 
 常规查询示例：
 
@@ -25,7 +25,7 @@ dayuan submit '这里填写完整查询任务'
 dayuan result <返回的job_id> --wait 20
 ```
 
-持续查询同一个 job_id，直到取得完成状态及实际答复。超时、运行中、未知状态或轮询错误不代表任务未提交，不要自动重复提交，也不要宣称完成。任务期间不要主动切换大圆会话；会话变化或进程重启后以实际错误与任务状态决定后续步骤。
+持续查询同一个 job_id，直到取得完成状态及实际答复。超时、运行中、未知状态或轮询错误不代表任务未提交，不要自动重复提交，也不要宣称完成。任务绑定桥接后台控制器，前台助理窗口可以关闭或切换。若底层历史会话被删除或客户端重启，以实际错误和任务状态决定恢复步骤。
 
 ## 任务与结果要求
 
@@ -37,13 +37,13 @@ dayuan result <返回的job_id> --wait 20
 
 ## 服务未运行时
 
-本机已安装 0.2 系统服务版，CLI 指向 `/Library/Application Support/Dayuan Bridge/dayuan-cli`。launchd 已验证能启动服务，并在异常退出后自动拉起；2026-11-13 已通过真实企微文档查询、附件识别与 CLI 结果读取验收。本机安装含原生调用超时修复（45 秒），不再受旧版 30 分钟租期限制。不要再按旧版 30 分钟临时桥接要求用户运行 `dayuan start` 或等待 `DAYUAN_BRIDGE_READY`。
+本机已安装 0.2.2 系统服务版，CLI 指向 `/Library/Application Support/Dayuan Bridge/dayuan-cli`。launchd 已验证启动和异常恢复；已验证大圆窗口关闭且桥接后台对象被清空后，CLI 自动创建后台对象、加载并选择已有会话、提交实际文档查询、读取完整结果。后台对象不附着任何窗口，不依赖前台助理会话。首次准备约需数十秒。
 
-若返回 `BROKER_UNAVAILABLE`，先检查 `launchctl print system/local.dayuan.bridge` 和 `dayuan --version`。确需启动或重启时使用 `dayuan service start` / `dayuan service restart`，需要管理员授权时再请用户在系统窗口或自己的终端验证。不要索取密码，不修改 sudoers 或系统保护。
+若返回 `BROKER_UNAVAILABLE`，先检查 `launchctl print system/local.dayuan.bridge` 和 `dayuan --version`。仅在系统服务确实无法自行恢复时，再使用 `dayuan service start` / `dayuan service restart`。需要管理员授权时说明是安装或修复服务，不把每次查询变成人工操作。不要索取密码或修改系统保护。
 
-服务 `service_running=true` 但 `ready=false` 时，不能认定未启动；检查 `reason` 与 `components`。`assistant=false` 表示助理未打开；`assistant=true` 但 `conversation=false` 时需进入历史中的实际对话，而非仅打开助理首页。正常查询不需要界面校准。大圆会话未加载与原生调用超时应分别处理，不要反复要求重启桥接，也不要对未提交的任务报告成功。
+`ready=false` 表示后台对象可能尚未准备，不代表需要用户操作。先让 `submit` / `ask` 自动准备。`JOB_ALREADY_RUNNING` 时继续轮询已有任务；不自动重复提交。`BACKGROUND_SESSION_NOT_READY` 才检查是否没有可用的大圆历史或登录失效；不能泛化为“请打开助理窗口”。
 
-企微需保持登录并存在可用的大圆会话。若出现其他具体错误，先检查状态与错误信息；需要用户恢复登录或启动服务时再说明最小操作。不要擅自改走需要申请权限的方案。
+当前边界：企微客户端须运行且已登录，并有至少一个可用的大圆历史会话；空历史自动创建新会话、退出企微后的全自动登录、整机重启后的完整链路尚未验收。首次安装/升级需系统管理员授权。文档权限不足、登录失效或云端人工确认不能自动绕过。查询复用已有的云端历史会话，消息仍会出现在该历史中；不是独立云端会话，不承诺无痕或与同一会话中的人工任务完全隔离。底层调试调用可能短暂停顿企微，不能承诺零卡顿。只在实际遇到这些限制时说明需要的最小配合，不走创建机器人或申请云端应用权限的方案。
 
 ## 文件范围
 

@@ -64,7 +64,7 @@ def main(argv=None):
         elif args.command == 'submit':
             data = request({'method': 'submit', 'task': args.task})
         elif args.command == 'result':
-            data = request({'method': 'result', 'job_id': args.job_id, 'wait_seconds': args.wait}, timeout=180)
+            data = request({'method': 'result', 'job_id': args.job_id, 'wait_seconds': args.wait}, timeout=240)
         elif args.command == 'shutdown':
             data = request({'method': 'shutdown'})
         elif args.command == 'forget':
@@ -76,7 +76,7 @@ def main(argv=None):
             print(json.dumps({'job_id': data['job_id'], 'status': data['status']}, ensure_ascii=True), file=sys.stderr, flush=True)
             deadline = time.monotonic() + args.timeout
             while data['status'] not in ('complete', 'error') and time.monotonic() < deadline:
-                data = request({'method': 'result', 'job_id': data['job_id'], 'wait_seconds': min(20, max(0, deadline-time.monotonic()))}, timeout=180)
+                data = request({'method': 'result', 'job_id': data['job_id'], 'wait_seconds': min(20, max(0, deadline-time.monotonic()))}, timeout=240)
                 if data.get('poll_error'):
                     break
             if data['status'] == 'complete' and args.output:

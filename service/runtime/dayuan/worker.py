@@ -107,6 +107,12 @@ class NativeSession:
 
     def handle(self, request):
         action = request['action']
+        if action == 'prepare':
+            self.number(native.prepare_expression())
+            status = self.doctor()
+            status['session'] = self.session_id() if status['ready'] else None
+            status['window_attached'] = bool(self.number(native.window_expression()))
+            return status
         status = self.doctor()
         if action == 'doctor':
             status['session'] = self.session_id() if status['ready'] else None
@@ -149,7 +155,7 @@ def main():
     response = {}; session = None; code = 0
     try:
         request = json.load(sys.stdin)
-        if request.get('action') not in ('doctor', 'submit', 'result'):
+        if request.get('action') not in ('doctor', 'prepare', 'submit', 'result'):
             raise BridgeError('UNKNOWN_NATIVE_ACTION')
         lldb.SBDebugger.Initialize()
         session = NativeSession(request.get('pid'), fixture, request.get('owner_uid'))

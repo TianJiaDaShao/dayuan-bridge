@@ -11,7 +11,7 @@ if type(uid) is not int or uid<501:raise SystemExit('A logged-in regular user is
 account=pwd.getpwuid(uid)
 temp=root/'service.new'
 fd=os.open(temp,os.O_WRONLY|os.O_CREAT|os.O_TRUNC|os.O_NOFOLLOW,0o644)
-with os.fdopen(fd,'w') as stream:json.dump({'schema':1,'owner_uid':uid,'version':'0.2.1'},stream);stream.write('\n')
+with os.fdopen(fd,'w') as stream:json.dump({'schema':1,'owner_uid':uid,'version':'0.2.2'},stream);stream.write('\n')
 os.replace(temp,config);os.chown(config,0,0);os.chmod(config,0o644)
 for directory,dirs,files in os.walk(root,followlinks=False):
  os.chown(directory,0,0);os.chmod(directory,0o755)

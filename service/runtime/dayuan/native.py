@@ -28,13 +28,20 @@ def contains(receiver, text):
     return '((unsigned char(*)(void*,void*,void*))objc_msgSend)((void*)(%s),%s,(void*)%s)' % (receiver, sel('containsString:'), literal(text))
 
 
-# Only already existing objects are resolved. These getters neither open windows
-# nor manufacture new conversations. Every native call resolves this chain anew.
-RESOLVE = r'''
-void *cls=((void*(*)(const char*))objc_getClass)("WEWWeClawChatMainViewController");
-void *main=0,*chat=0,*view=0,*sender=0,*list=0,*items=0;
-'''
-RESOLVE += 'if(cls && %s) main=%s;\n' % (has('cls', 'existingInstance'), obj('cls', 'existingInstance'))
+# A retained, windowless controller belongs to the bridge, not to the user's
+# foreground assistant window. Runtime selectors are resolved on every call.
+HEADLESS_KEY = 'dayuan.bridge.headless.v1'
+APP = '((void*(*)(const char*))objc_getClass)("NSApplication")'
+HEAD = """
+void *appcls=APP_CLASS,*app=0,*key=HEADLESS_SEL;
+if(appcls && APP_HAS)app=APP_SHARED;
+void *main=app?((void*(*)(void*,void*))objc_getAssociatedObject)(app,key):0;
+""".replace('APP_CLASS', APP).replace('HEADLESS_SEL', sel(HEADLESS_KEY)).replace('APP_HAS', has('appcls','sharedApplication')).replace('APP_SHARED',obj('appcls','sharedApplication'))
+RESOLVE = 'void *cls=((void*(*)(const char*))objc_getClass)("WEWWeClawChatMainViewController");' + HEAD
+# The Foundation-only test fixture has no NSApplication. Never fall back to
+# the foreground conversation in the real AppKit client.
+RESOLVE += 'if(!appcls && cls && %s)main=%s;' % (has('cls','existingInstance'),obj('cls','existingInstance'))
+RESOLVE += 'void *chat=0,*view=0,*sender=0,*list=0,*items=0;'
 for target, source, selector in [
     ('chat', 'main', 'currentChatViewController'),
     ('view', 'chat', 'clawView'),
@@ -43,6 +50,20 @@ for target, source, selector in [
     ('items', 'list', 'dataArray'),
 ]:
     RESOLVE += 'if(%s && %s) %s=%s;\n' % (source, has(source, selector), target, obj(source, selector))
+
+
+def prepare_expression():
+    code='void *cls=((void*(*)(const char*))objc_getClass)("WEWWeClawChatMainViewController");'+HEAD
+    code+='if(app && !main && cls && %s){main=%s;if(main){((void(*)(void*,void*,void*,unsigned long))objc_setAssociatedObject)(app,key,main,1);%s;}}' % (has('cls','new'),obj('cls','new'),obj('main','release'))
+    code+='void *v=0,*left=0,*list=0,*chat=0;'
+    for target,source,selector in [('v','main','view'),('left','main','leftVC'),('list','left','convListCtrl'),('chat','main','currentChatViewController')]:
+        code+='if(%s && %s)%s=%s;' % (source,has(source,selector),target,obj(source,selector))
+    code+='if(list && !chat && %s){%s;}' % (has('list','wew_selectNext'),obj('list','wew_selectNext'))
+    return '({'+code+' (unsigned long long)(main?1:0);})'
+
+
+def window_expression():
+    return '({'+RESOLVE+' void *v=main?'+obj('main','view')+':0; (unsigned long long)(v?'+obj('v','window')+':0);})'
 
 
 def doctor_expression():

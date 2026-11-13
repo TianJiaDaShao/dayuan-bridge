@@ -12,7 +12,7 @@ class FakeNative:
  def __init__(self):self.calls=[];self.ready=False;self.fail_submit=False;self.fail_poll=False
  def __call__(self,data):
   self.calls.append(data)
-  if data['action']=='doctor':return {'pid':123,'session':'s1','ready':True}
+  if data['action'] in ('doctor','prepare'):return {'pid':123,'session':'s1','ready':True}
   if data['action']=='submit':
    if self.fail_submit:raise RuntimeError('worker stopped after dispatch')
    return {'pid':123,'session':'s1','submitted':True}
@@ -54,6 +54,41 @@ class BrokerTests(unittest.TestCase):
    self.assertTrue(request({'method':'status'},path=path)['ready'])
    with self.assertRaises(RuntimeError):request({'method':'exec'},path=path)
    request({'method':'shutdown'},path=path);thread.join(3);self.assertFalse(thread.is_alive());self.assertFalse(path.exists())
+
+class BackgroundSessionTests(unittest.TestCase):
+ def test_closed_assistant_is_prepared_before_single_dispatch(self):
+  calls=[];attempts=[0]
+  def native_call(payload):
+   calls.append(payload['action'])
+   if payload['action']=='prepare':
+    attempts[0]+=1
+    return {'ready':attempts[0]>1,'session':'headless' if attempts[0]>1 else None,'pid':123,'window_attached':False}
+   self.assertEqual(payload['action'],'submit')
+   self.assertEqual(payload['session'],'headless')
+   return {'submitted':True,'session':'headless','pid':123}
+  bridge=Broker(native_call)
+  job=bridge.submit('read document')
+  self.assertEqual(job['status'],'running')
+  self.assertEqual(calls,['prepare','prepare','submit'])
+ def test_empty_history_never_dispatches_a_query(self):
+  calls=[]
+  def native_call(payload):
+   calls.append(payload['action'])
+   return {'ready':False,'session':None,'pid':123,'window_attached':False}
+  bridge=Broker(native_call)
+  with self.assertRaisesRegex(RuntimeError,'BACKGROUND_SESSION_NOT_READY'):bridge.submit('read document')
+  self.assertTrue(calls)
+  self.assertTrue(all(action=='prepare' for action in calls))
+  self.assertIsNone(bridge.active_job)
+ def test_visible_controller_is_rejected_before_dispatch(self):
+  calls=[]
+  def native_call(payload):
+   calls.append(payload['action'])
+   return {'ready':True,'session':'s1','pid':123,'window_attached':True}
+  bridge=Broker(native_call)
+  with self.assertRaisesRegex(RuntimeError,'BACKGROUND_CONTROLLER_HAS_WINDOW'):bridge.submit('read document')
+  self.assertEqual(calls,['prepare'])
+  self.assertIsNone(bridge.active_job)
 
 class NativeTests(unittest.TestCase):
  def call(self,payload):
@@ -122,7 +157,7 @@ class RecoveryTests(unittest.TestCase):
   fake=FakeNative();bridge=Broker(fake);job=bridge.submit('query');calls=[]
   def restarted(payload):
    calls.append(payload)
-   if payload['action']=='doctor':return {'ready':True,'session':'s1','pid':456}
+   if payload['action'] in ('doctor','prepare'):return {'ready':True,'session':'s1','pid':456}
    if payload['action']=='result' and payload['pid']==123:raise RuntimeError('CLIENT_PID_INVALID')
    if payload['action']=='result' and payload['pid']==456:return {'ready':True,'text':'recovered'}
    self.fail('Unexpected resubmission')
@@ -132,7 +167,7 @@ class RecoveryTests(unittest.TestCase):
  def test_client_restart_never_follows_a_different_session(self):
   bridge=Broker(FakeNative());job=bridge.submit('query')
   def wrong_session(payload):
-   if payload['action']=='doctor':return {'ready':True,'session':'another','pid':456}
+   if payload['action'] in ('doctor','prepare'):return {'ready':True,'session':'another','pid':456}
    self.assertEqual(payload['pid'],123);raise RuntimeError('CLIENT_PID_INVALID')
   bridge.native_call=wrong_session
   result=bridge.result(job['job_id']);self.assertEqual(result['poll_error'],'SESSION_CHANGED')
