@@ -86,12 +86,12 @@ class NativeSession:
             raise BridgeError('NATIVE_EXPRESSION_FAILED: ' + str(value.GetError()))
         return value.GetValueAsUnsigned()
 
-    def string(self, expression):
+    def string(self, expression, max_length=262144):
         ptr = self.number(expression)
         if not ptr:
             return None
         error = lldb.SBError()
-        result = self.process.ReadCStringFromMemory(ptr, 262144, error)
+        result = self.process.ReadCStringFromMemory(ptr, max_length, error)
         if error.Fail():
             raise BridgeError('RESULT_READ_FAILED')
         return result
@@ -115,6 +115,8 @@ class NativeSession:
                 status['ready'] = status['session_bootstrap_complete']
             status['session'] = self.session_id() if status['ready'] else None
             status['window_attached'] = bool(self.number(native.window_expression()))
+            if status['ready']:
+                status['message_baseline_key'] = self.string(native.last_message_key_expression())
             return status
         status = self.doctor()
         if action == 'doctor':
@@ -126,19 +128,26 @@ class NativeSession:
         if request.get('session') and request['session'] != session:
             raise BridgeError('SESSION_CHANGED')
         if action == 'submit':
+            baseline = request.get('message_baseline_key')
+            if baseline is not None and self.string(native.last_message_key_expression()) != baseline:
+                return {'submitted': False, 'not_dispatched': True, 'error': 'MESSAGE_BASELINE_CHANGED'}
+            previous_outgoing_key = self.string(native.last_message_key_expression(outgoing_only=True))
             if self.number(native.submit_expression(request['prompt'])) != 1:
                 raise BridgeError('SUBMIT_UNAVAILABLE')
-            return {'submitted': True, 'pid': self.pid, 'session': session}
+            sent_key = self.string(native.last_message_key_expression(outgoing_only=True))
+            return {'submitted': True, 'pid': self.pid, 'session': session, 'sent_message_key': sent_key if sent_key and sent_key != previous_outgoing_key else None}
         if action == 'result':
             begin, end = request['begin'], request['end']
-            text = self.string(native.result_expression(begin, end))
-            if text is None:
-                return {'ready': False, 'session': session}
-            start = text.find(begin)
-            finish = text.rfind(end)
-            if start < 0 or finish <= start:
-                raise BridgeError('INCOMPLETE_RESULT')
-            return {'ready': True, 'session': session, 'text': text[start + len(begin):finish].strip()}
+            raw = self.string(native.reply_snapshot_expression(begin,end,request.get('sent_message_key'),request.get('message_baseline_key')),max_length=1048576)
+            snapshot = json.loads(raw or '{}')
+            if not snapshot.get('ready'):
+                return dict(snapshot, ready=False, session=session)
+            text = snapshot.get('text','')
+            if len(text.encode('utf-8'))>262144:raise BridgeError('RESULT_TOO_LARGE')
+            start = text.find(begin) + len(begin) if begin in text else 0
+            finish = text.rfind(end) if end in text else len(text)
+            if finish < start:raise BridgeError('INCOMPLETE_RESULT')
+            return {'ready':True,'session':session,'text':text[start:finish].strip(),'sent_message_key':snapshot.get('sent_message_key'),'result_source':snapshot.get('match')}
         raise BridgeError('UNKNOWN_NATIVE_ACTION')
 
     def close(self):

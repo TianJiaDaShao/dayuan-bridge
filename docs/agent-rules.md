@@ -9,7 +9,7 @@
 ## 调用顺序
 
 1. 直接执行 CLI `dayuan`；若 PATH 中找不到，使用 `$HOME/.local/bin/dayuan` 或 `/usr/local/bin/dayuan`。不再维护或注册 MCP 接入。
-2. 首先执行 `dayuan status`，检查服务。0.2.3 会在提交时自动创建并准备专用大圆会话：若 `service_running=true` 且 `automatic_prepare_on_submit=true`，即使 `ready=false`，仍直接执行一次 `submit` / `ask`。不要要求用户打开大圆、选择历史对话、发送校准消息或运行启动命令。以实际提交错误决定是否需要协助。
+2. 首先执行 `dayuan status`，检查服务。0.2.4 会在提交时自动创建并准备专用大圆会话：若 `service_running=true` 且 `automatic_prepare_on_submit=true`，即使 `ready=false`，仍直接执行一次 `submit` / `ask`。不要要求用户打开大圆、选择历史对话、发送校准消息或运行启动命令。以实际提交错误决定是否需要协助。
 
 常规查询示例：
 
@@ -25,7 +25,7 @@ dayuan submit '这里填写完整查询任务'
 dayuan result <返回的job_id> --wait 20
 ```
 
-持续查询同一个 job_id，直到取得完成状态及实际答复。超时、运行中、未知状态或轮询错误不代表任务未提交，不要自动重复提交，也不要宣称完成。任务绑定桥接后台控制器，前台助理窗口可以关闭或切换。若底层历史会话被删除或客户端重启，以实际错误和任务状态决定恢复步骤。
+持续查询同一个 job_id，直到取得完成状态及实际答复。0.2.4 使用持久化的消息ID/消息基线和客户端完成状态关联回复；首尾标记只作兼容恢复，不再是唯一依据。缺失首标记的已完成答复可以恢复，不要为此重新提交任务。超时、运行中、未知状态或轮询错误不代表任务未提交，不要自动重复提交，也不要宣称完成。任务绑定桥接后台控制器，前台助理窗口可以关闭或切换。若底层历史会话被删除或客户端重启，以实际错误和任务状态决定恢复步骤。
 
 ## 任务与结果要求
 
@@ -37,7 +37,7 @@ dayuan result <返回的job_id> --wait 20
 
 ## 服务未运行时
 
-本机已安装 0.2.3 系统服务版，CLI 指向 `/Library/Application Support/Dayuan Bridge/dayuan-cli`。launchd 已验证启动和异常恢复；已验证大圆窗口关闭且桥接后台对象被清空后，CLI 自动创建后台对象、创建全新的专用大圆会话、等待初始化完成、提交实际文档查询并读取完整结果。后台对象不附着任何窗口，不依赖前台助理会话或已有历史对话。首次新建会话需要等待云端初始化，后续调用复用已解除调试的工作进程缓存。
+本机已安装 0.2.4 系统服务版，CLI 指向 `/Library/Application Support/Dayuan Bridge/dayuan-cli`。launchd 已验证启动和异常恢复；已验证大圆窗口关闭且桥接后台对象被清空后，CLI 自动创建后台对象、创建全新的专用大圆会话、等待初始化完成、提交实际文档查询并读取完整结果。后台对象不附着任何窗口，不依赖前台助理会话或已有历史对话。首次新建会话需要等待云端初始化，后续调用复用已解除调试的工作进程缓存。
 
 若返回 `BROKER_UNAVAILABLE`，先检查 `launchctl print system/local.dayuan.bridge` 和 `dayuan --version`。仅在系统服务确实无法自行恢复时，再使用 `dayuan service start` / `dayuan service restart`。需要管理员授权时说明是安装或修复服务，不把每次查询变成人工操作。不要索取密码或修改系统保护。
 

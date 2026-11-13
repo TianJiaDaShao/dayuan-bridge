@@ -121,7 +121,7 @@ class Broker:
         raise RuntimeError('BACKGROUND_SESSION_NOT_READY: automatic session creation did not become ready; check login and client availability')
 
     def public_job(self, job):
-        return {k: job[k] for k in ('job_id', 'status', 'created_at', 'text', 'error') if k in job}
+        return {k: job[k] for k in ('job_id', 'status', 'created_at', 'text', 'error','result_source') if k in job}
 
     def submit(self, task):
         if not isinstance(task, str) or not task.strip() or len(task) > MAX_TASK:
@@ -156,7 +156,7 @@ class Broker:
             if not context.get('ready') or not context.get('session'):
                 raise RuntimeError('ASSISTANT_SESSION_UNAVAILABLE')
             with self.jobs_lock:
-                job.update(session=context['session'], pid=context['pid'])
+                job.update(session=context['session'], pid=context['pid'],message_baseline_key=context.get('message_baseline_key'))
                 self._persist()
         except Exception as exc:
             with self.jobs_lock:
@@ -166,11 +166,15 @@ class Broker:
             raise
         try:
             data = self.native_call({'action': 'submit', 'prompt': prompt,
-                                     'pid': job['pid'], 'session': job['session']})
+                                     'pid': job['pid'], 'session': job['session'], 'message_baseline_key': job.get('message_baseline_key')})
+            if data.get('not_dispatched'):
+                with self.jobs_lock:
+                    job.update(status='error',error=data.get('error','NOT_DISPATCHED'));self.active_job=None;self._persist()
+                return self.public_job(job)
             if not data.get('submitted'):
                 raise RuntimeError('SUBMIT_NOT_CONFIRMED')
             with self.jobs_lock:
-                job.update(status='running', session=data['session'], pid=data['pid'])
+                job.update(status='running', session=data['session'], pid=data['pid'],sent_message_key=data.get('sent_message_key'))
                 self._persist()
             return self.public_job(job)
         except Exception as exc:
@@ -197,10 +201,13 @@ class Broker:
             try:
                 data = self.native_call({'action': 'result', 'pid': job['pid'],
                                          'session': job['session'],
-                                         'begin': job['begin'], 'end': job['end']})
+                                         'begin': job['begin'], 'end': job['end'], 'message_baseline_key':job.get('message_baseline_key'), 'sent_message_key':job.get('sent_message_key')})
+                if data.get('sent_message_key') and data['sent_message_key']!=job.get('sent_message_key'):
+                    with self.jobs_lock:
+                        job['sent_message_key']=data['sent_message_key'];self._persist()
                 if data.get('ready'):
                     with self.jobs_lock:
-                        job.update(status='complete', text=data['text'])
+                        job.update(status='complete', text=data['text'],result_source=data.get('result_source'))
                         job.pop('error', None)
                         if self.active_job == job_id:
                             self.active_job = None
