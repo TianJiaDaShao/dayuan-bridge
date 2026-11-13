@@ -2,7 +2,7 @@ import io,json,os,subprocess,sys,tempfile,threading,time,unittest
 from pathlib import Path
 SERVICE=Path(__file__).resolve().parents[1]
 sys.path.insert(0,str(SERVICE/'runtime'))
-from dayuan import native,mcp
+from dayuan import native
 from dayuan.broker import Broker,serve,request
 ROOT=Path(__file__).resolve().parents[2]
 FIXTURE=Path(__file__).with_name('native_fixture')
@@ -54,20 +54,6 @@ class BrokerTests(unittest.TestCase):
    self.assertTrue(request({'method':'status'},path=path)['ready'])
    with self.assertRaises(RuntimeError):request({'method':'exec'},path=path)
    request({'method':'shutdown'},path=path);thread.join(3);self.assertFalse(thread.is_alive());self.assertFalse(path.exists())
-
-class MCPTests(unittest.TestCase):
- def test_initialize_and_notification(self):
-  self.assertIsNone(mcp.dispatch({'jsonrpc':'2.0','method':'notifications/initialized'}))
-  out=mcp.dispatch({'id':1,'method':'initialize','params':{'protocolVersion':'2025-03-26'}})
-  self.assertEqual(out['result']['protocolVersion'],'2025-03-26')
-  self.assertEqual(len(mcp.dispatch({'id':2,'method':'tools/list'})['result']['tools']),3)
- def test_tool_error_is_explicit(self):
-  out=mcp.dispatch({'id':1,'method':'tools/call','params':{'name':'exec'}})
-  self.assertTrue(out['result']['isError'])
- def test_stdio_protocol_clean(self):
-  source=io.StringIO('{"id":1,"method":"ping"}\n{"method":"notifications/initialized"}\nBAD\n')
-  sink=io.StringIO();mcp.serve_stdio(source,sink)
-  rows=[json.loads(x) for x in sink.getvalue().splitlines()];self.assertEqual(len(rows),2);self.assertEqual(rows[1]['error']['code'],-32700)
 
 class NativeTests(unittest.TestCase):
  def call(self,payload):

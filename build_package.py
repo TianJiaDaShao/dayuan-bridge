@@ -4,7 +4,7 @@ import hashlib,json,os,shutil,subprocess,zipfile
 from pathlib import Path
 ROOT=Path(__file__).resolve().parent
 BUILD=Path(os.environ.get('DAYUAN_BUILD_DIR',str(ROOT/'.build')))
-VERSION='0.2.0'
+VERSION='0.2.1'
 DIST=ROOT/'site/dist/downloads'
 
 def run(args):subprocess.run([str(x) for x in args],check=True,env=dict(os.environ,COPYFILE_DISABLE='1'))
@@ -33,7 +33,7 @@ def main():
 <welcome file="welcome.html" mime-type="text/html"/><conclusion file="conclusion.html" mime-type="text/html"/>
 <choices-outline><line choice="default"><line choice="local.dayuan.bridge"/></line></choices-outline>
 <choice id="default"/><choice id="local.dayuan.bridge" visible="false"><pkg-ref id="local.dayuan.bridge"/></choice>
-<pkg-ref id="local.dayuan.bridge" version="0.2.0" onConclusion="none">DayuanBridge-component.pkg</pkg-ref>
+<pkg-ref id="local.dayuan.bridge" version="0.2.1" onConclusion="none">DayuanBridge-component.pkg</pkg-ref>
 </installer-gui-script>''',encoding='utf-8')
  DIST.mkdir(parents=True,exist_ok=True);package=DIST/('DayuanBridge-'+VERSION+'.pkg')
  run(['/usr/bin/productbuild','--distribution',distribution,'--resources',ROOT/'service/resources','--package-path',BUILD,package])

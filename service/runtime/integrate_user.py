@@ -2,9 +2,7 @@
 import json
 import os
 from pathlib import Path
-import shutil
 import socket
-import subprocess
 import sys
 
 ROOT=Path('/Library/Application Support/Dayuan Bridge')
@@ -38,13 +36,5 @@ def main():
     elif action=='remove':
         if link.is_symlink() and os.readlink(link)==COMMAND:link.unlink()
     else:raise RuntimeError('Unknown integration action')
-    codex=shutil.which('codex',path=str(directory)+':/opt/homebrew/bin:/usr/local/bin:/usr/bin:/bin')
-    if not codex:return
-    if action=='install':
-        subprocess.run([codex,'mcp','add','dayuan-local','--',COMMAND,'mcp'],check=True,timeout=30)
-    else:
-        value=subprocess.run([codex,'mcp','get','dayuan-local','--json'],text=True,capture_output=True,timeout=20)
-        if value.returncode==0 and json.loads(value.stdout).get('transport',{}).get('command')==COMMAND:
-            subprocess.run([codex,'mcp','remove','dayuan-local'],check=True,timeout=20)
 
 if __name__=='__main__':main()

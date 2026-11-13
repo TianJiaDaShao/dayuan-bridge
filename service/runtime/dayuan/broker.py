@@ -26,7 +26,7 @@ def socket_path():
     return runtime_dir() / 'bridge.sock'
 
 
-def request(data, timeout=55, path=None):
+def request(data, timeout=180, path=None):
     path = path or socket_path()
     with socket.socket(socket.AF_UNIX, socket.SOCK_STREAM) as conn:
         conn.settimeout(timeout)
@@ -102,7 +102,7 @@ class Broker:
             proc = subprocess.run(['/usr/bin/python3', '-m', 'dayuan.worker'],
                                   input=json.dumps(payload), text=True, encoding='utf-8',
                                   stdout=subprocess.PIPE, stderr=subprocess.PIPE,
-                                  env=env, timeout=15)
+                                  env=env, timeout=45)
         try:
             value = json.loads(proc.stdout)
         except (ValueError, TypeError):

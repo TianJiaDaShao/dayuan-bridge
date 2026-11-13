@@ -1,4 +1,4 @@
-圆桥 Dayuan Bridge 0.2 Preview
+圆桥 Dayuan Bridge 0.2.1 Preview
 
 这是独立开发的本地连接服务，不属于腾讯或 Apple 官方产品。
 当前安装包为本地构建，未使用 Developer ID 签名或 Apple 公证。
@@ -30,13 +30,6 @@
   如需放弃跟踪，明确运行 dayuan forget 任务ID；远端任务可能仍在执行。
   本机最多保留200条已结束任务及当前任务，目录仅管理员可直接读取。
   当前通过只读指令约束任务；这不是底层权限隔离。
-
-MCP
-  安装程序检测到Codex时会尝试自动注册dayuan-local。
-  手动添加：
-  codex mcp add dayuan-local -- '/Library/Application Support/Dayuan Bridge/dayuan-cli' mcp
-  工具：dayuan_status、dayuan_submit、dayuan_result。
-  现有工具列表可能需要重新加载。
 
 目录
   程序：/Library/Application Support/Dayuan Bridge

@@ -28,7 +28,6 @@ def main(argv=None):
     ask.add_argument('task');ask.add_argument('--timeout', type=float, default=600)
     ask.add_argument('--output', type=Path)
     sub.add_parser('shutdown', help='Stop broker; does not cancel tasks already running in Dayuan.')
-    sub.add_parser('mcp', help='Run unprivileged MCP stdio adapter.')
     service = sub.add_parser('service', help='Manage installed macOS background service.')
     service.add_argument('action', choices=['start', 'stop', 'restart', 'status', 'uninstall'])
     forget = sub.add_parser('forget', help='Stop tracking a task; does not cancel it remotely.')
@@ -60,15 +59,12 @@ def main(argv=None):
                   ready=lambda: print('DAYUAN_BRIDGE_READY', flush=True))
             print('DAYUAN_BRIDGE_STOPPED', flush=True)
             return 0
-        if args.command == 'mcp':
-            from .mcp import serve_stdio
-            serve_stdio();return 0
         if args.command == 'status':
             data = request({'method': 'status'})
         elif args.command == 'submit':
             data = request({'method': 'submit', 'task': args.task})
         elif args.command == 'result':
-            data = request({'method': 'result', 'job_id': args.job_id, 'wait_seconds': args.wait}, timeout=50)
+            data = request({'method': 'result', 'job_id': args.job_id, 'wait_seconds': args.wait}, timeout=180)
         elif args.command == 'shutdown':
             data = request({'method': 'shutdown'})
         elif args.command == 'forget':
@@ -80,7 +76,7 @@ def main(argv=None):
             print(json.dumps({'job_id': data['job_id'], 'status': data['status']}, ensure_ascii=True), file=sys.stderr, flush=True)
             deadline = time.monotonic() + args.timeout
             while data['status'] not in ('complete', 'error') and time.monotonic() < deadline:
-                data = request({'method': 'result', 'job_id': data['job_id'], 'wait_seconds': min(20, max(0, deadline-time.monotonic()))}, timeout=50)
+                data = request({'method': 'result', 'job_id': data['job_id'], 'wait_seconds': min(20, max(0, deadline-time.monotonic()))}, timeout=180)
                 if data.get('poll_error'):
                     break
             if data['status'] == 'complete' and args.output:

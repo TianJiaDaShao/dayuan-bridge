@@ -8,9 +8,8 @@
 
 ## 调用顺序
 
-1. 优先使用已注册的 `dayuan-local` MCP：先调用 `dayuan_status`，再用 `dayuan_submit` 提交任务，用 `dayuan_result` 获取结果。参数以当前工具 schema 为准。
-2. 当前对话没有暴露 MCP 工具时，直接使用 CLI `dayuan`；若 PATH 中找不到，使用 `$HOME/.local/bin/dayuan`（服务安装版也可使用 `/usr/local/bin/dayuan`）。不要因此要求用户重新安装或重启 Codex。
-3. 首先执行 `dayuan status`，确认企微登录、会话与桥接状态。当前客户端的 `--help` 和实际状态是能力依据，不把已生成的安装包当作已安装服务。
+1. 直接执行 CLI `dayuan`；若 PATH 中找不到，使用 `$HOME/.local/bin/dayuan` 或 `/usr/local/bin/dayuan`。不再维护或注册 MCP 接入。
+2. 首先执行 `dayuan status`，确认企微登录、会话与桥接状态。当前客户端的 `--help` 和实际状态是能力依据。
 
 常规查询示例：
 
@@ -38,13 +37,11 @@ dayuan result <返回的job_id> --wait 20
 
 ## 服务未运行时
 
-若返回 `BROKER_UNAVAILABLE`，先根据 `dayuan --help` 确认安装方式。旧版临时桥接需要用户在自己的终端运行：
+本机已安装 0.2 系统服务版，CLI 指向 `/Library/Application Support/Dayuan Bridge/dayuan-cli`。launchd 已验证能启动服务，并在异常退出后自动拉起；2026-11-13 已通过真实企微文档查询、附件识别与 CLI 结果读取验收。本机安装含原生调用超时修复（45 秒），不再受旧版 30 分钟租期限制。不要再按旧版 30 分钟临时桥接要求用户运行 `dayuan start` 或等待 `DAYUAN_BRIDGE_READY`。
 
-```sh
-dayuan start
-```
+若返回 `BROKER_UNAVAILABLE`，先检查 `launchctl print system/local.dayuan.bridge` 和 `dayuan --version`。确需启动或重启时使用 `dayuan service start` / `dayuan service restart`，需要管理员授权时再请用户在系统窗口或自己的终端验证。不要索取密码，不修改 sudoers 或系统保护。
 
-旧版等待 `DAYUAN_BRIDGE_READY` 后继续原任务。0.2 服务安装版改用 `dayuan service start`，随后重新检查 `dayuan status`，不等待旧版就绪标记。仅在确实遇到此阻碍时请用户配合，不提前要求启动。管理员密码只在用户本机终端输入，不索取密码，不修改 sudoers 或系统保护，也不假设其他终端中的 sudo 授权能被当前执行环境复用。
+服务 `service_running=true` 但 `ready=false` 时，不能认定未启动；检查 `reason` 与 `components`。`assistant=false` 表示助理未打开；`assistant=true` 但 `conversation=false` 时需进入历史中的实际对话，而非仅打开助理首页。正常查询不需要界面校准。大圆会话未加载与原生调用超时应分别处理，不要反复要求重启桥接，也不要对未提交的任务报告成功。
 
 企微需保持登录并存在可用的大圆会话。若出现其他具体错误，先检查状态与错误信息；需要用户恢复登录或启动服务时再说明最小操作。不要擅自改走需要申请权限的方案。
 

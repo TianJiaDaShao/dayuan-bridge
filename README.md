@@ -1,16 +1,16 @@
 # 圆桥 · Dayuan Bridge
 
-将企业微信智能助理「大圆」接入本地 CLI 与 MCP。通过 Mac 上已有的登录态提交自然语言任务并取回结果，可用于查询文档、表格记录及附件图片，无需创建企业机器人。
+将企业微信智能助理「大圆」接入本地 CLI。通过 Mac 上已有的登录态提交自然语言任务并取回结果，可用于查询文档、表格记录及附件图片，无需创建企业机器人。
 
-**0.2.0 Preview · Apple silicon macOS · 企业微信 5.0.13（70807）**
+**0.2.1 Preview · Apple silicon macOS · 企业微信 5.0.13（70807）**
 
 独立开发项目，非腾讯或 Apple 官方产品。此工具依赖客户端内部接口与 LLDB 调试访问，不是企微官方开放 API；客户端升级或本机策略可能导致不可用。
 
 ## 当前验证范围
 
 - 本地原型已完成真实任务提交、结果读取和附件图片识别，无需界面校准；企微窗口可以最小化。
-- 服务版包含 launchd 安装、任务持久化、受限 Unix socket 和 CLI/MCP。相关逻辑有自动化测试。
-- 安装包已完成构建与静态检查，**尚未完成系统服务的首次真实安装验收**，不应视为生产就绪。
+- 服务版包含 launchd 安装、任务持久化、受限 Unix socket 和 CLI。相关逻辑有自动化测试。
+- 安装包已完成构建与静态检查，**已在开发者 Mac 完成首次安装、自动拉起与真实文档查询验收；其他机器仍需验证**，仍属于实验预览版。
 - 预览安装包未使用 Developer ID 签名，未经过 Apple 公证。需管理员安装权限、Xcode 命令行工具和可用的大圆会话；不会关闭 SIP 或修改 sudoers。
 
 ## 安装与使用
@@ -33,17 +33,9 @@ dayuan result <job_id> --wait 20
 
 超时或返回未知状态后，继续轮询同一个任务 ID，不要盲目重复提交。任务执行期间保持当前大圆会话。结果只包含大圆实际返回的内容，不能保证每种文档、图片或云端工具都支持。
 
-## MCP
+## AI 助手调用
 
-安装程序检测到 Codex 时尝试注册 `dayuan-local`。也可手动注册：
-
-```sh
-codex mcp add dayuan-local -- '/Library/Application Support/Dayuan Bridge/dayuan-cli' mcp
-```
-
-提供 `dayuan_status`、`dayuan_submit`、`dayuan_result` 三个工具。其他 MCP 客户端以相同程序路径和 `mcp` 参数配置 stdio 服务。
-
-供 AI 助手引用的使用规则见 [docs/agent-rules.md](docs/agent-rules.md)。规则需由你的助手配置显式引用；仅下载仓库不会自动生效。
+AI 助手直接执行 CLI：先 `dayuan status`，再提交任务并按任务 ID 轮询。使用规则见 [docs/agent-rules.md](docs/agent-rules.md)。需由助手配置显式引用，下载仓库不会自动生效。
 
 ## 管理
 
@@ -76,7 +68,7 @@ python3 build_package.py
 
 ## 项目结构
 
-- `service/runtime/`：本地桥接、CLI、MCP 和服务管理。
+- `service/runtime/`：本地桥接、CLI 和服务管理。
 - `service/installer-scripts/`：安装前检查与安装配置。
 - `service/tests/`：自动化测试与独立原生测试程序源码。
 - `site/dist/`：可本地打开的产品介绍网页；下载链接需要对应的构建产物。
