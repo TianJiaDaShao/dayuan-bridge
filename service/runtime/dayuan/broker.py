@@ -144,7 +144,11 @@ class Broker:
         prompt = ('Execute this read-only task. Do not modify business data, send messages '
                   'to other people, or create business documents. Temporary files needed '
                   'for reading attachments are allowed. If a tool fails, retry at most '
-                  'once, then return available information and the error.\nTASK:\n' + task +
+                  'once, then return available information and the error. '
+                  'For image attachments, default to locating and returning ORIGINAL image '
+                  'download URLs or actual local file paths. Do not OCR, describe or reinterpret '
+                  'images unless TASK explicitly asks for your image analysis. The caller will '
+                  'download and inspect the originals. Never fabricate URLs or paths.\nTASK:\n' + task +
                   '\nFinal answer: put ' + job['begin'] + ' on its own line before the '
                   'answer and ' + job['end'] + ' on its own line after the answer. '
                   'Do not include these markers in progress updates. Preserve tables '

@@ -1,4 +1,4 @@
-圆桥 Dayuan Bridge 0.2.4 Preview
+圆桥 Dayuan Bridge 0.2.5 Preview
 
 这是独立开发的本地连接服务，不属于腾讯或 Apple 官方产品。
 当前安装包为本地构建，未使用 Developer ID 签名或 Apple 公证。

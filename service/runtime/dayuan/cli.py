@@ -32,8 +32,23 @@ def main(argv=None):
     service.add_argument('action', choices=['start', 'stop', 'restart', 'status', 'uninstall'])
     forget = sub.add_parser('forget', help='Stop tracking a task; does not cancel it remotely.')
     forget.add_argument('job_id')
+    fetch=sub.add_parser('fetch-images',help='Download original image URLs from a completed reply; no OCR.')
+    fetch.add_argument('job_id',nargs='?');fetch.add_argument('--url',action='append',default=[]);fetch.add_argument('--directory',type=Path,required=True)
     args = parser.parse_args(argv)
     try:
+        if args.command == 'fetch-images':
+            from .images import download_images
+            if args.url:
+                text='\n'.join(args.url)
+            else:
+                if not args.job_id:raise ValueError('Provide a job_id or --url')
+                job=request({'method':'result','job_id':args.job_id,'wait_seconds':0})
+                if job.get('status')!='complete':raise RuntimeError('JOB_NOT_COMPLETE: poll the same job first')
+                text=job.get('text','')
+            data=download_images(text,args.directory)
+            data['job_id']=args.job_id
+            print(json.dumps(data,ensure_ascii=False,indent=2))
+            return 0 if data['files'] and not data['errors'] else 2
         if args.command == 'start':
             if not configuration():
                 raise RuntimeError('SERVICE_NOT_INSTALLED: install the Dayuan Bridge package first')
