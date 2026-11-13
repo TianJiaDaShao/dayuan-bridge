@@ -11,7 +11,7 @@ if type(uid) is not int or uid<501:raise SystemExit('A logged-in regular user is
 account=pwd.getpwuid(uid)
 temp=root/'service.new'
 fd=os.open(temp,os.O_WRONLY|os.O_CREAT|os.O_TRUNC|os.O_NOFOLLOW,0o644)
-with os.fdopen(fd,'w') as stream:json.dump({'schema':1,'owner_uid':uid,'version':'0.2.2'},stream);stream.write('\n')
+with os.fdopen(fd,'w') as stream:json.dump({'schema':1,'owner_uid':uid,'version':'0.2.3'},stream);stream.write('\n')
 os.replace(temp,config);os.chown(config,0,0);os.chmod(config,0o644)
 for directory,dirs,files in os.walk(root,followlinks=False):
  os.chown(directory,0,0);os.chmod(directory,0o755)
@@ -31,5 +31,9 @@ for name in ('service.log','service-error.log'):
 integration=subprocess.run(['/bin/launchctl','asuser',str(uid),'/usr/bin/sudo','-H','-u',account.pw_name,'/usr/bin/python3','-I',str(root/'integrate_user.py'),'install'],capture_output=True,text=True,timeout=60)
 if integration.returncode:print('Optional user integration needs attention; the system CLI is /usr/local/bin/dayuan.')
 plist=Path('/Library/LaunchDaemons/local.dayuan.bridge.plist');os.chown(plist,0,0);os.chmod(plist,0o644)
-subprocess.run(['/bin/launchctl','bootstrap','system',str(plist)],check=True)
+for attempt in range(20):
+ result=subprocess.run(['/bin/launchctl','bootstrap','system',str(plist)],capture_output=True,text=True)
+ if result.returncode==0:break
+ time.sleep(.5)
+else:raise RuntimeError('launchd bootstrap failed: '+result.stderr)
 print('Dayuan Bridge installed and started for uid',uid)

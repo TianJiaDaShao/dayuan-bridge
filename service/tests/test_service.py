@@ -70,13 +70,15 @@ class BackgroundSessionTests(unittest.TestCase):
   job=bridge.submit('read document')
   self.assertEqual(job['status'],'running')
   self.assertEqual(calls,['prepare','prepare','submit'])
- def test_empty_history_never_dispatches_a_query(self):
+ def test_failed_session_creation_never_dispatches_a_query(self):
   calls=[]
   def native_call(payload):
    calls.append(payload['action'])
    return {'ready':False,'session':None,'pid':123,'window_attached':False}
   bridge=Broker(native_call)
-  with self.assertRaisesRegex(RuntimeError,'BACKGROUND_SESSION_NOT_READY'):bridge.submit('read document')
+  from unittest.mock import patch
+  with patch.object(bridge.stopping,'wait',return_value=False):
+   with self.assertRaisesRegex(RuntimeError,'BACKGROUND_SESSION_NOT_READY'):bridge.submit('read document')
   self.assertTrue(calls)
   self.assertTrue(all(action=='prepare' for action in calls))
   self.assertIsNone(bridge.active_job)

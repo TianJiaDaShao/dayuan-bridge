@@ -37,7 +37,7 @@ def find_pid(requested=None, owner_uid=None):
 
 
 class NativeSession:
-    def __init__(self, pid=None, fixture=None, owner_uid=None):
+    def __init__(self, pid=None, fixture=None, owner_uid=None, cached=None):
         self.process = None
         self.client_version = {'version': 'fixture', 'build': 'fixture'}
         if not fixture:
@@ -47,9 +47,9 @@ class NativeSession:
                                    'build': metadata.get('CFBundleVersion')}
             if self.client_version != {'version': '5.0.13', 'build': '70807'}:
                 raise BridgeError('CLIENT_VERSION_UNVERIFIED: refusing native calls until compatibility is checked')
-        self.debugger = lldb.SBDebugger.Create(False)
+        self.debugger = cached[0] if cached else lldb.SBDebugger.Create(False)
         self.debugger.SetAsync(False)
-        self.target = self.debugger.CreateTarget(str(fixture) if fixture else EXE)
+        self.target = cached[1] if cached else self.debugger.CreateTarget(str(fixture) if fixture else None)
         self.listener = lldb.SBListener('dayuan-native-worker')
         error = lldb.SBError()
         if fixture:
@@ -110,6 +110,9 @@ class NativeSession:
         if action == 'prepare':
             self.number(native.prepare_expression())
             status = self.doctor()
+            if status['ready']:
+                status['session_bootstrap_complete'] = bool(self.number(native.bootstrap_ready_expression()))
+                status['ready'] = status['session_bootstrap_complete']
             status['session'] = self.session_id() if status['ready'] else None
             status['window_attached'] = bool(self.number(native.window_expression()))
             return status
@@ -150,15 +153,12 @@ class NativeSession:
         return {'detached': True}
 
 
-def main():
-    fixture = sys.argv[2] if len(sys.argv) == 3 and sys.argv[1] == '--fixture' else None
+def execute(request, fixture=None, cached=None):
     response = {}; session = None; code = 0
     try:
-        request = json.load(sys.stdin)
         if request.get('action') not in ('doctor', 'prepare', 'submit', 'result'):
             raise BridgeError('UNKNOWN_NATIVE_ACTION')
-        lldb.SBDebugger.Initialize()
-        session = NativeSession(request.get('pid'), fixture, request.get('owner_uid'))
+        session = NativeSession(request.get('pid'), fixture, request.get('owner_uid'), cached)
         response = {'ok': True, 'data': session.handle(request)}
     except Exception as exc:
         response = {'ok': False, 'error': str(exc)}
@@ -171,11 +171,35 @@ def main():
                 response['cleanup'] = {'detached': False, 'error': str(exc)}
                 response['ok'] = False
                 code = 1
-    sys.stdout.write(json.dumps(response, ensure_ascii=True) + '\n')
-    sys.stdout.flush()
-    # LLDB owns native state threads. After explicit detach, terminate the
-    # isolated worker without racing those threads against Python finalizers.
-    # The supervisor treats any missing response/nonzero exit as a failure.
+    return response, code
+
+
+def main():
+    lldb.SBDebugger.Initialize()
+    if sys.argv[1:] == ['--persistent']:
+        debugger = lldb.SBDebugger.Create(False)
+        debugger.SetAsync(False)
+        target = None; target_pid = None
+        for line in sys.stdin:
+            try:
+                request = json.loads(line)
+                if not isinstance(request, dict):raise ValueError('INVALID_NATIVE_REQUEST')
+                if request.get('action') not in ('doctor','prepare','submit','result'):raise BridgeError('UNKNOWN_NATIVE_ACTION')
+                pid = find_pid(request.get('pid'), request.get('owner_uid'))
+                if target is None or pid != target_pid:
+                    target = debugger.CreateTarget(None); target_pid = pid
+                response, code = execute(request, cached=(debugger, target))
+            except Exception as exc:
+                response = {'ok': False, 'error': str(exc)}
+            sys.stdout.write(json.dumps(response, ensure_ascii=True) + '\n');sys.stdout.flush()
+        os._exit(0)
+    fixture = sys.argv[2] if len(sys.argv) == 3 and sys.argv[1] == '--fixture' else None
+    try:
+        response, code = execute(json.load(sys.stdin), fixture=fixture)
+    except Exception as exc:
+        response, code = {'ok':False, 'error':str(exc)}, 1
+    sys.stdout.write(json.dumps(response, ensure_ascii=True) + '\n');sys.stdout.flush()
+    # Each request explicitly detaches; skip LLDB Python finalizers on exit.
     os._exit(code)
 
 

@@ -13,6 +13,7 @@ import threading
 import time
 import uuid
 from .service import configuration, socket_directory, prepare_system_directory, peer_uid
+from .native_transport import NativeTransport
 
 MAX_REQUEST = 524288
 MAX_TASK = 20000
@@ -48,6 +49,7 @@ def request(data, timeout=240, path=None):
 class Broker:
     def __init__(self, native_call=None, owner_uid=None, state_path=None):
         self.native_lock = threading.Lock()
+        self.native_transport = NativeTransport()
         self.jobs_lock = threading.RLock()
         self.jobs = {}
         self.active_job = None
@@ -95,27 +97,19 @@ class Broker:
 
     def _native_call(self, payload):
         payload = dict(payload, owner_uid=self.owner_uid)
-        env = {'PATH': '/usr/bin:/bin:/usr/sbin:/sbin',
-               'PYTHONPATH': str(Path(__file__).resolve().parents[1]),
-               'PYTHONIOENCODING': 'utf-8'}
         with self.native_lock:
-            proc = subprocess.run(['/usr/bin/python3', '-m', 'dayuan.worker'],
-                                  input=json.dumps(payload), text=True, encoding='utf-8',
-                                  stdout=subprocess.PIPE, stderr=subprocess.PIPE,
-                                  env=env, timeout=45)
-        try:
-            value = json.loads(proc.stdout)
-        except (ValueError, TypeError):
-            raise RuntimeError('NATIVE_WORKER_FAILED: exit=%s' % proc.returncode)
-        if proc.returncode or not value.get('ok') or not value.get('cleanup', {}).get('detached'):
+            value = self.native_transport.request(payload)
+        if not value.get('ok') or not value.get('cleanup', {}).get('detached'):
+            if not value.get('cleanup', {}).get('detached'):
+                self.native_transport.close()
             raise RuntimeError(value.get('error') or 'NATIVE_CLEANUP_FAILED')
         return value['data']
 
     def ready_context(self):
-        # Each attempt detaches so the client's run loop can populate its list
-        # and load messages asynchronously. No query is dispatched here.
+        # Each attempt detaches so the client can create its dedicated session
+        # and finish the initialization greeting. No business task is sent here.
         deadline = time.monotonic() + 100
-        for attempt in range(3):
+        for attempt in range(25):
             context = self.native_call({'action': 'prepare'})
             if context.get('window_attached'):
                 raise RuntimeError('BACKGROUND_CONTROLLER_HAS_WINDOW')
@@ -123,8 +117,8 @@ class Broker:
                 return context
             if time.monotonic() >= deadline:
                 break
-            self.stopping.wait(1)
-        raise RuntimeError('BACKGROUND_SESSION_NOT_READY: login or an available Dayuan history session is required')
+            self.stopping.wait(.5)
+        raise RuntimeError('BACKGROUND_SESSION_NOT_READY: automatic session creation did not become ready; check login and client availability')
 
     def public_job(self, job):
         return {k: job[k] for k in ('job_id', 'status', 'created_at', 'text', 'error') if k in job}
@@ -154,7 +148,9 @@ class Broker:
                   '\nFinal answer: put ' + job['begin'] + ' on its own line before the '
                   'answer and ' + job['end'] + ' on its own line after the answer. '
                   'Do not include these markers in progress updates. Preserve tables '
-                  'as Markdown and distinguish observations from inference.')
+                  'as Markdown and distinguish observations from inference. '
+                  'These envelope delimiters are mandatory even if TASK says only reply '
+                  'with a short phrase or requests a different output format.')
         try:
             context = self.ready_context()
             if not context.get('ready') or not context.get('session'):
@@ -319,6 +315,6 @@ def serve(owner_uid, owner_gid, lifetime=1800, path=None, broker=None, ready=Non
                     continue
                 pool.submit(connection, conn)
     finally:
-        broker.stopping.set();server.close()
+        broker.stopping.set();server.close();broker.native_transport.close()
         if path.exists() and stat.S_ISSOCK(path.lstat().st_mode):
             path.unlink()

@@ -5,6 +5,7 @@ import pwd
 import shutil
 import subprocess
 import sys
+import time
 sys.path.insert(0, str(Path(__file__).resolve().parent))
 from dayuan.service import ROOT, CONFIG, LABEL, configuration
 
@@ -29,7 +30,11 @@ def main():
         if action=='start' and loaded:
             call(['/bin/launchctl','kickstart','system/'+LABEL])
         else:
-            call(['/bin/launchctl','bootstrap','system',str(PLIST)])
+            for attempt in range(20):
+                result=call(['/bin/launchctl','bootstrap','system',str(PLIST)],False)
+                if result.returncode==0:break
+                time.sleep(.5)
+            else:raise RuntimeError('launchd bootstrap failed: '+result.stderr)
         print('Dayuan Bridge service started')
     if action=='stop':print('Dayuan Bridge service stopped')
     if action=='uninstall':

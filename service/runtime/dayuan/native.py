@@ -5,7 +5,7 @@ import json
 def literal(value):
     # UTF-8 literals preserve non-BMP characters (JSON surrogate escapes are
     # invalid universal character names in Clang's Objective-C parser).
-    return "@" + json.dumps(value, ensure_ascii=False)
+    return '((void*(*)(void*,void*,const char*))objc_msgSend)(((void*(*)(const char*))objc_getClass)("NSString"),((void*(*)(const char*))sel_registerName)("stringWithUTF8String:"),%s)' % json.dumps(value, ensure_ascii=False)
 
 
 def sel(name):
@@ -30,7 +30,7 @@ def contains(receiver, text):
 
 # A retained, windowless controller belongs to the bridge, not to the user's
 # foreground assistant window. Runtime selectors are resolved on every call.
-HEADLESS_KEY = 'dayuan.bridge.headless.v1'
+HEADLESS_KEY = 'dayuan.bridge.headless.v2'
 APP = '((void*(*)(const char*))objc_getClass)("NSApplication")'
 HEAD = """
 void *appcls=APP_CLASS,*app=0,*key=HEADLESS_SEL;
@@ -55,10 +55,14 @@ for target, source, selector in [
 def prepare_expression():
     code='void *cls=((void*(*)(const char*))objc_getClass)("WEWWeClawChatMainViewController");'+HEAD
     code+='if(app && !main && cls && %s){main=%s;if(main){((void(*)(void*,void*,void*,unsigned long))objc_setAssociatedObject)(app,key,main,1);%s;}}' % (has('cls','new'),obj('cls','new'),obj('main','release'))
-    code+='void *v=0,*left=0,*list=0,*chat=0;'
-    for target,source,selector in [('v','main','view'),('left','main','leftVC'),('list','left','convListCtrl'),('chat','main','currentChatViewController')]:
+    code+='void *v=0,*chat=0;'
+    for target,source,selector in [('v','main','view'),('chat','main','currentChatViewController')]:
         code+='if(%s && %s)%s=%s;' % (source,has(source,selector),target,obj(source,selector))
-    code+='if(list && !chat && %s){%s;}' % (has('list','wew_selectNext'),obj('list','wew_selectNext'))
+    code+='void *right=main?%s:0;void *create=0;void *flag=%s;' % (obj('main','rightVC'),sel('dayuan.bridge.session_creation_requested'))
+    code+='if(right && !chat && %s){%s;create=%s;}' % (has('right','wew_ensureCreateView'),obj('right','wew_ensureCreateView'),obj('right','createView'))
+    code+='void *requested=main?((void*(*)(void*,void*))objc_getAssociatedObject)(main,flag):0;'
+    code+='if(requested && %s && ((double(*)(void*,void*))objc_msgSend)(requested,%s)<-120.0){requested=0;}' % (has('requested','timeIntervalSinceNow'),sel('timeIntervalSinceNow'))
+    code+='if(create && !chat && !requested && %s){((void(*)(void*,void*,void*,unsigned long))objc_setAssociatedObject)(main,flag,(void*)%s,1);((void(*)(void*,void*,void*))objc_msgSend)(create,%s,(void*)%s);}' % (has('create','wew_setInputTextAndSend:'),obj('((void*(*)(const char*))objc_getClass)("NSDate")','date'),sel('wew_setInputTextAndSend:'),literal('圆桥连接初始化。只回复“已就绪”，不要执行其他操作。'))
     return '({'+code+' (unsigned long long)(main?1:0);})'
 
 
@@ -107,3 +111,9 @@ found;})''' % (RESOLVE, sel('count'), sel('objectAtIndex:'), has('item', 'messag
                has('m', 'amISender'), boolean('m', 'amISender'), has('m', 'text'), obj('m', 'text'),
                has('m', 'attrText'), obj('m', 'attrText'), has('a', 'string'), obj('a', 'string'),
                contains('s', begin), contains('s', end), obj('s', 'UTF8String'))
+
+
+def bootstrap_ready_expression():
+    code=RESOLVE+'void *flagkey=%s;void *ready=main?((void*(*)(void*,void*))objc_getAssociatedObject)(main,flagkey):0;' % sel('dayuan.bridge.bootstrap_complete')
+    code+='if(main && !ready && %s){ready=%s;((void(*)(void*,void*,void*,unsigned long))objc_setAssociatedObject)(main,flagkey,ready,1);}' % (result_expression('已就绪','已就绪'),obj('((void*(*)(const char*))objc_getClass)("NSNull")','null'))
+    return '({'+code+'(unsigned long long)(ready?1:0);})'
